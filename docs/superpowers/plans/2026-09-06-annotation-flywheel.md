@@ -1277,7 +1277,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - [ ] **Step 1: Install Playwright without downloading browsers**
 
 Run: `npm install --save-dev playwright@1.63.0 && node -e "console.log(require('playwright/package.json').version)"`
-Expected: `1.63.0`. No browser download happens; the e2e uses the installed Google Chrome through `channel: 'chrome'`.
+Expected: `1.63.0`. The e2e uses Playwright's own Chromium (`channel: 'chromium'`, headless), because branded Google Chrome 137 and later ignores `--load-extension`. Chromium 1243 is already in `~/Library/Caches/ms-playwright`; if it were missing, `npx playwright install chromium` fetches it.
 
 - [ ] **Step 2: Create the fixture page**
 
@@ -1355,8 +1355,8 @@ fs.copyFileSync(path.join(ROOT, 'eval', 'corpus.json'), corpusCopy);
 fs.writeFileSync(logCopy, '{}\n');
 
 const context = await chromium.launchPersistentContext(profile, {
-  channel: 'chrome',
-  headless: false,
+  channel: 'chromium',
+  headless: true,
   args: [`--disable-extensions-except=${ROOT}`, `--load-extension=${ROOT}`],
 });
 
@@ -1471,7 +1471,7 @@ try {
 - [ ] **Step 4: Run it to verify it fails at the pill**
 
 Run: `npm run e2e`
-Expected: a Chrome window opens, the two flags appear, then the script fails with `pill never appeared for #slop-a` after about a minute. If it fails earlier at `both slop paragraphs flagged`, Ollama is slow to load the model; run it once more. Close the Chrome window if the script leaves it open.
+Expected: the two flags appear (printed as step lines), then the script fails with `pill never appeared for #slop-a` after about a minute. If it fails earlier at `both slop paragraphs flagged`, Ollama is slow to load the model; run it once more. Close the Chrome window if the script leaves it open.
 
 - [ ] **Step 5: Commit**
 
@@ -2071,7 +2071,7 @@ import { chromium } from 'playwright';
 import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path';
 const ROOT = process.cwd();
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'slop-clear-'));
-const ctx = await chromium.launchPersistentContext(profile, { channel: 'chrome', headless: false, args: ['--disable-extensions-except=' + ROOT, '--load-extension=' + ROOT] });
+const ctx = await chromium.launchPersistentContext(profile, { channel: 'chromium', headless: true, args: ['--disable-extensions-except=' + ROOT, '--load-extension=' + ROOT] });
 let [sw] = ctx.serviceWorkers(); if (!sw) sw = await ctx.waitForEvent('serviceworker');
 const id = new URL(sw.url()).host;
 await sw.evaluate(() => chrome.storage.local.set({ records: [
