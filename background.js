@@ -26,6 +26,11 @@ const MODEL = "qwen3:4b";
 
 const TIMEOUT_MS = 20000;
 
+async function sha256Hex(text) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, "0")).join("");
+}
+
 // Flag only at this confidence or above. Raise to "high" for fewer, safer
 // flags; lower to "low" to catch more and accept more false positives.
 const MIN_CONFIDENCE = "medium";
@@ -149,6 +154,11 @@ const RESPONSE_SCHEMA = {
   required: ["verdict", "confidence"]
 };
 
+// Identifies which prompt produced a verdict. It travels on every annotation
+// record, so a label captured under one prompt is never read as a verdict of a
+// later one. Computed once; the prompt does not change while the worker runs.
+const PROMPT_HASH = sha256Hex(`${SYSTEM_PROMPT}\n${FEW_SHOT}`);
+
 async function judge(text) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -186,7 +196,10 @@ async function judge(text) {
 
     return {
       isSlop: parsed.verdict === "SLOP" && confident,
+      verdict: parsed.verdict,
       confidence: parsed.confidence,
+      model: MODEL,
+      prompt_sha256: await PROMPT_HASH,
       reason: `Flagged as low-information filler (${parsed.confidence} confidence). Click to dismiss, Escape to clear the page.`
     };
   } finally {
@@ -194,16 +207,46 @@ async function judge(text) {
   }
 }
 
+// Appends one annotation or dismissal record. Reads and writes are chained so
+// two saves arriving together cannot each read the old array and drop the
+// other's entry. A failed write does not poison the chain for the next one.
+let storageChain = Promise.resolve();
+function appendRecord(record) {
+  const next = storageChain.catch(() => {}).then(async () => {
+    const { records = [] } = await chrome.storage.local.get("records");
+    records.push(record);
+    await chrome.storage.local.set({ records });
+  });
+  storageChain = next;
+  return next;
+}
+
+// The content script cannot hash on plain http pages, where crypto.subtle is
+// missing, so the hash is added here where it is always available.
+async function finishRecord(record) {
+  return { ...record, text_sha256: await sha256Hex(record.text) };
+}
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action !== "checkSlop") return;
+  if (request.action === "checkSlop") {
+    judge(request.text)
+      .then(sendResponse)
+      .catch(error => {
+        console.error("[slop] local model call failed:", error);
+        // Fail closed: never flag when we could not get a real verdict.
+        sendResponse({ isSlop: false, error: true });
+      });
+    return true; // tells Chrome the response is asynchronous
+  }
 
-  judge(request.text)
-    .then(sendResponse)
-    .catch(error => {
-      console.error("[slop] local model call failed:", error);
-      // Fail closed: never flag when we could not get a real verdict.
-      sendResponse({ isSlop: false, error: true });
-    });
-
-  return true; // tells Chrome the response is asynchronous
+  if (request.action === "saveRecord") {
+    finishRecord(request.record)
+      .then(appendRecord)
+      .then(() => sendResponse({ ok: true }))
+      .catch(error => {
+        console.error("[slop] could not save record:", error);
+        sendResponse({ ok: false, error: String(error) });
+      });
+    return true;
+  }
 });
