@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { sha256Hex, collapse, classify, CLASSES } from './triage_lib.mjs';
+import { sha256Hex, collapse, classify, CLASSES, corpusHashes, dropKnown, nextProdId, toCorpusItem } from './triage_lib.mjs';
 
 const model = (verdict, confidence, flagged) => ({ name: 'qwen3:4b', verdict, confidence, flagged, prompt_sha256: 'p'.repeat(64) });
 const page = { url: 'https://example.com/a', title: 'A' };
@@ -52,4 +52,53 @@ test('classify names the five classes', () => {
   assert.equal(classify(item('HUMAN', model('REAL', 'medium', false))), 'agree_human');
   assert.equal(classify({ sha: 's', annotation: null, dismissals: 1, latest: dis('t', model('SLOP', 'high', true), t) }), 'dismissal_only');
   assert.deepEqual(CLASSES, ['false_positive', 'false_negative', 'agree_slop', 'agree_human', 'dismissal_only']);
+});
+
+test('dropKnown removes hashes already in the corpus or the log', () => {
+  const m = model('SLOP', 'high', true);
+  const t = '2026-09-06T10:00:00.000Z';
+  const items = collapse([ann('in corpus', 'SLOP', m, t), ann('in log', 'SLOP', m, t), ann('fresh', 'SLOP', m, t)]);
+  const corpus = [{ id: 'ai-01', text: 'in corpus' }];
+  const log = { [sha256Hex('in log')]: { decision: 'reject', id: null, at: t } };
+  assert.deepEqual(dropKnown(items, corpus, log).map(i => i.latest.text), ['fresh']);
+  assert.ok(corpusHashes(corpus).has(sha256Hex('in corpus')));
+});
+
+test('nextProdId continues from the highest prod id and ignores other ids', () => {
+  assert.equal(nextProdId([]), 'prod-001');
+  assert.equal(nextProdId([{ id: 'ai-01' }, { id: 'prod-003' }, { id: 'prod-002' }]), 'prod-004');
+  assert.equal(nextProdId([{ id: 'prod-099' }]), 'prod-100');
+});
+
+test('toCorpusItem builds the production item shape', () => {
+  const m = model('REAL', 'medium', false);
+  const t = '2026-09-06T10:00:00.000Z';
+  const [item] = collapse([ann('a circular claim', 'SLOP', m, t, 'subject and object are the same')]);
+  const out = toCorpusItem(item, { id: 'prod-001', bucket: 'K_circular_claim', label: 'SLOP', explanation: item.annotation.explanation });
+  assert.deepEqual(out, {
+    id: 'prod-001',
+    label: 'SLOP',
+    bucket: 'K_circular_claim',
+    text: 'a circular claim',
+    label_provenance: 'UNKNOWN',
+    label_quality: 'SLOP',
+    source: {
+      url: 'https://example.com/a',
+      title: 'A',
+      annotated_at: t,
+      explanation: 'subject and object are the same',
+      dismissals: 0,
+      model_at_capture: m,
+    },
+  });
+});
+
+test('toCorpusItem works for a dismissal-only paragraph', () => {
+  const m = model('SLOP', 'high', true);
+  const [item] = collapse([dis('dismissed twice', m, '2026-09-06T10:00:00.000Z'), dis('dismissed twice', m, '2026-09-06T10:01:00.000Z')]);
+  const out = toCorpusItem(item, { id: 'prod-002', bucket: 'P_production', label: 'HUMAN', explanation: 'dismissed by reader' });
+  assert.equal(out.label_quality, 'HUMAN');
+  assert.equal(out.source.dismissals, 2);
+  assert.equal(out.source.explanation, 'dismissed by reader');
+  assert.equal(out.source.annotated_at, '2026-09-06T10:01:00.000Z');
 });

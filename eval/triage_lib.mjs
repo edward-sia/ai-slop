@@ -40,3 +40,47 @@ export function classify(item) {
   if (!flagged && readerSaidSlop) return 'false_negative';
   return readerSaidSlop ? 'agree_slop' : 'agree_human';
 }
+
+export function corpusHashes(corpus) {
+  return new Set(corpus.map(item => sha256Hex(item.text)));
+}
+
+// Anything already in the corpus, or already promoted or rejected, is never
+// asked about again. Re-running triage on the same inbox files is free.
+export function dropKnown(items, corpus, log) {
+  const known = corpusHashes(corpus);
+  return items.filter(item => !known.has(item.sha) && !(item.sha in log));
+}
+
+export function nextProdId(corpus) {
+  let max = 0;
+  for (const { id } of corpus) {
+    const m = /^prod-(\d+)$/.exec(id);
+    if (m) max = Math.max(max, Number(m[1]));
+  }
+  return `prod-${String(max + 1).padStart(3, '0')}`;
+}
+
+// `label` is written to both `label` and `label_quality`. On the hand-written
+// items `label` follows provenance, but a production item has no known
+// provenance, and `label` is only read for run.mjs progress marks and as the
+// scorer's fallback when an axis field is missing. Both axis fields are present.
+export function toCorpusItem(item, { id, bucket, label, explanation }) {
+  const source = item.annotation ?? item.latest;
+  return {
+    id,
+    label,
+    bucket,
+    text: source.text,
+    label_provenance: 'UNKNOWN',
+    label_quality: label,
+    source: {
+      url: source.page.url,
+      title: source.page.title,
+      annotated_at: source.created_at,
+      explanation,
+      dismissals: item.dismissals,
+      model_at_capture: { ...source.model },
+    },
+  };
+}
