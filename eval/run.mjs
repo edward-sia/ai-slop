@@ -11,6 +11,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { SYSTEM_V2, FEWSHOT_V2 } from './prompt_v2_frozen.mjs';
+import { readLivePrompt } from './live_prompt.mjs';
 
 const DIR = path.dirname(new URL(import.meta.url).pathname);
 const corpus = JSON.parse(fs.readFileSync(path.join(DIR, 'corpus.json'), 'utf8'));
@@ -22,6 +23,14 @@ const arg = (name, fallback) => {
 const ARM = arg('arm', 'v2');
 const MODEL = arg('model', 'qwen3:4b');
 const MIN_CONFIDENCE = arg('min-confidence', 'medium');
+// --split=prod scores only items promoted from reader annotations, which carry a
+// `source` block. --split=synthetic scores only the hand-written items.
+const SPLIT = arg('split', 'all');
+const inSplit = item => {
+  if (SPLIT === 'all') return true;
+  const isProd = 'source' in item;
+  return SPLIT === 'prod' ? isProd : !isProd;
+};
 const CONFIDENCE_RANK = { low: 0, medium: 1, high: 2 };
 
 const V1_PROMPT = `You are a forensic linguistic analyzer. Your task is to evaluate the provided text snippet and determine if it was written by an AI language model or a human.
@@ -39,20 +48,7 @@ Analyze the text. If it exhibits high confidence of being AI-generated slop, res
 
 // v2 reads the live prompt out of background.js so the eval can never drift
 // away from what the extension actually sends.
-const bg = fs.readFileSync(path.join(DIR, '..', 'background.js'), 'utf8');
-const grab = label => {
-  // plain string slicing rather than a regex, so backticks in the prompt
-  // cannot break the extraction
-  const marker = 'const ' + label + ' = ' + String.fromCharCode(96);
-  const from = bg.indexOf(marker);
-  if (from === -1) throw new Error('could not find ' + label + ' in background.js');
-  const bodyStart = from + marker.length;
-  const to = bg.indexOf(String.fromCharCode(96) + ';', bodyStart);
-  if (to === -1) throw new Error('unterminated ' + label + ' in background.js');
-  return bg.slice(bodyStart, to);
-};
-const LIVE_SYSTEM = grab('SYSTEM_PROMPT');
-const LIVE_FEWSHOT = grab('FEW_SHOT');
+const { system: LIVE_SYSTEM, fewshot: LIVE_FEWSHOT } = readLivePrompt();
 // v2 is the prompt before the no-ai-slop taxonomy was folded in; v3 is the live one.
 let V2_SYSTEM  = ARM === 'v2' ? SYSTEM_V2  : LIVE_SYSTEM;
 let V2_FEWSHOT = ARM === 'v2' ? FEWSHOT_V2 : LIVE_FEWSHOT;
@@ -112,7 +108,7 @@ async function v2(text) {
 
 const judge = ARM === 'v1' ? v1 : v2;  // v2 and v3 share the transport, only the prompt differs
 const results = [];
-for (const item of corpus) {
+for (const item of corpus.filter(inSplit)) {
   const t0 = Date.now();
   let out;
   try { out = await judge(item.text); }
@@ -124,4 +120,4 @@ process.stderr.write('\n');
 
 const file = path.join(DIR, `results_${tag}_${MODEL.replace(/[:\/]/g, '_')}.json`);
 fs.writeFileSync(file, JSON.stringify(results, null, 2));
-console.log(`tag=${tag} model=${MODEL} system=${sysFile ?? ARM} fewshot=${fewFile ?? ARM} -> ${path.basename(file)}`);
+console.log(`tag=${tag} model=${MODEL} system=${sysFile ?? ARM} fewshot=${fewFile ?? ARM} split=${SPLIT} -> ${path.basename(file)}`);
