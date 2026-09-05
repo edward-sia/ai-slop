@@ -1,0 +1,41 @@
+<paragraph>
+Digital transformation is no longer optional for the modern enterprise. Organisations that
+embrace change position themselves to capture the opportunities ahead. The journey requires
+commitment, but the rewards for those who commit are substantial.
+</paragraph>
+{"verdict":"SLOP","confidence":"high"}
+
+<paragraph>
+Hiring was never really about the resume. It was about the referral. Not the school, not the
+years of experience, not the certifications. The thing nobody tells you: people hire people
+they already trust. Once you see it, the whole process makes sense.
+</paragraph>
+{"verdict":"SLOP","confidence":"high"}
+
+<paragraph>
+Participants receiving the intervention showed a 14 percent reduction in readmission at
+ninety days, moreover the effect held after adjustment for age and comorbidity. It is
+paramount that these findings be replicated in a larger cohort before guidance changes.
+</paragraph>
+{"verdict":"REAL","confidence":"high"}
+
+<paragraph>
+Returns are accepted within 30 days of delivery provided the item is unworn and tagged.
+Refunds are issued to the original payment method within five business days of the parcel
+reaching our depot. Postage on returns is paid by the customer.
+</paragraph>
+{"verdict":"REAL","confidence":"high"}
+
+<paragraph>
+Replaced the bottom bracket on the commuter bike, third time in two years. The bearings on
+these cheap sealed units just do not survive winter salt. Forty quid and an hour each time.
+Next one I am paying for the good ones.
+</paragraph>
+{"verdict":"REAL","confidence":"high"}
+
+<paragraph>
+Collaboration is at the heart of every high-performing organisation. When teams work well
+together, everyone benefits from the shared momentum that follows. Creating that culture is
+an ongoing effort, and one that pays dividends over time.
+</paragraph>
+{"verdict":"SLOP","confidence":"high"}

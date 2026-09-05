@@ -1,0 +1,51 @@
+/*
+ * Every visual the extension applies lives here, and only here.
+ *
+ * Two rules keep this from damaging the pages it runs on:
+ *
+ * 1. The content script never writes to element.style. It only adds and removes
+ *    the class below. Dismissing removes the class, so the page falls straight
+ *    back to its own CSS. There is nothing to "restore" because nothing of the
+ *    page's was ever overwritten.
+ *
+ * 2. Only properties that do not participate in layout are used: outline,
+ *    background-color and border-radius. Flagging a paragraph therefore causes
+ *    no reflow and nothing on the page moves, either when the flag appears or
+ *    when it goes away. border and padding would both resize the box, which is
+ *    why they are not used here.
+ *
+ * !important is safe in this file for the same reason: we revert by deleting
+ * the class, never by writing a competing value.
+ */
+
+.ai-slop-flagged {
+  outline: 2px dashed #f59f00 !important;
+  outline-offset: 3px !important;
+  border-radius: 3px !important;
+  background-color: rgba(245, 159, 0, 0.13) !important;
+
+  /* Deliberately not set, because they belong to the page:
+     color, display, position, z-index, margin, padding, border,
+     box-shadow, transition, cursor, font. A translucent tint is used
+     instead of a solid one so the page's own text colour stays readable. */
+}
+
+.ai-slop-flagged:hover {
+  outline-style: solid !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  .ai-slop-flagged {
+    outline-color: #ffc046 !important;
+    background-color: rgba(255, 192, 70, 0.16) !important;
+  }
+}
+
+/* Windows high contrast and forced-colours modes ignore custom colours,
+   so ask the OS for its own highlight colour instead of vanishing. */
+@media (forced-colors: active) {
+  .ai-slop-flagged {
+    outline-color: Mark !important;
+    background-color: transparent !important;
+  }
+}

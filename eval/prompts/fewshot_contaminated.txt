@@ -1,0 +1,32 @@
+<paragraph>
+In today's fast-paced digital landscape, embracing innovation is more important than ever.
+Companies that foster a culture of agility will be well positioned to thrive. Ultimately,
+the future belongs to those who dare to reimagine what is possible.
+</paragraph>
+{"verdict":"SLOP","confidence":"high"}
+
+<paragraph>
+Furthermore, the Court of Appeals has twice rejected substantially similar claims, and the
+legislative history does not support the reading advanced in the brief. It is therefore
+paramount that this Court decline to extend the doctrine.
+</paragraph>
+{"verdict":"REAL","confidence":"high"}
+
+<paragraph>
+Preheat the oven to 220C. Toss the potatoes in oil and salt and roast for 25 minutes without
+touching them. If they are not brown by then your oven runs cold, so add ten minutes.
+</paragraph>
+{"verdict":"REAL","confidence":"high"}
+
+<paragraph>
+ok so update on the cat: he is fine, the vet says hairball, and I am now $340 poorer. sorry
+for the 2am panic post, I really thought he was dying
+</paragraph>
+{"verdict":"REAL","confidence":"high"}
+
+<paragraph>
+Mental wellness is an ongoing journey that requires intentional practice. It is important to
+note that everyone's path looks different. Whether through mindfulness, movement, or
+connection, the key is consistency. Remember, you are not alone.
+</paragraph>
+{"verdict":"SLOP","confidence":"high"}
