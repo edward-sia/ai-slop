@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { sha256Hex, collapse, classify, CLASSES, corpusHashes, dropKnown, nextProdId, toCorpusItem } from './triage_lib.mjs';
+import { sha256Hex, collapse, classify, CLASSES, corpusHashes, dropKnown, nextProdId, toCorpusItem, countByClass, calibration, shingles, sharesRun } from './triage_lib.mjs';
 
 const model = (verdict, confidence, flagged) => ({ name: 'qwen3:4b', verdict, confidence, flagged, prompt_sha256: 'p'.repeat(64) });
 const page = { url: 'https://example.com/a', title: 'A' };
@@ -101,4 +101,52 @@ test('toCorpusItem works for a dismissal-only paragraph', () => {
   assert.equal(out.source.dismissals, 2);
   assert.equal(out.source.explanation, 'dismissed by reader');
   assert.equal(out.source.annotated_at, '2026-09-06T10:01:00.000Z');
+});
+
+test('countByClass tallies every class, including zeros', () => {
+  const t = '2026-09-06T10:00:00.000Z';
+  const items = collapse([
+    ann('a', 'HUMAN', model('SLOP', 'high', true), t),
+    ann('b', 'SLOP', model('REAL', 'high', false), t),
+    ann('c', 'SLOP', model('SLOP', 'high', true), t),
+    dis('d', model('SLOP', 'medium', true), t),
+  ]);
+  assert.deepEqual(countByClass(items), { false_positive: 1, false_negative: 1, agree_slop: 1, agree_human: 0, dismissal_only: 1 });
+});
+
+test('calibration crosses model output with reader labels and simulates each gate', () => {
+  const t = '2026-09-06T10:00:00.000Z';
+  const items = collapse([
+    ann('a', 'SLOP', model('SLOP', 'high', true), t),
+    ann('b', 'HUMAN', model('SLOP', 'medium', true), t),
+    ann('c', 'SLOP', model('SLOP', 'low', false), t),
+    ann('d', 'HUMAN', model('REAL', 'high', false), t),
+    dis('e', model('SLOP', 'high', true), t),
+  ]);
+  const cal = calibration(items);
+  assert.equal(cal.total, 4);
+  assert.deepEqual(cal.cells['SLOP/high'], { SLOP: 1, HUMAN: 0 });
+  assert.deepEqual(cal.cells['SLOP/medium'], { SLOP: 0, HUMAN: 1 });
+  assert.deepEqual(cal.cells['REAL/high'], { SLOP: 0, HUMAN: 1 });
+  assert.deepEqual(cal.gates.high, { flagged: 1, precision: 1, flag_rate: 0.25 });
+  assert.deepEqual(cal.gates.medium, { flagged: 2, precision: 0.5, flag_rate: 0.5 });
+  assert.deepEqual(cal.gates.low, { flagged: 3, precision: 2 / 3, flag_rate: 0.75 });
+});
+
+test('calibration reports null precision when nothing would be flagged', () => {
+  const t = '2026-09-06T10:00:00.000Z';
+  const cal = calibration(collapse([ann('a', 'HUMAN', model('REAL', 'high', false), t)]));
+  assert.equal(cal.gates.high.precision, null);
+  assert.equal(cal.gates.high.flag_rate, 0);
+});
+
+test('shingles lowercases, strips punctuation and slides a window', () => {
+  assert.deepEqual([...shingles('Hello, World! Hello world again', 2)], ['hello world', 'world hello', 'world again']);
+});
+
+test('sharesRun finds a six word run and ignores shorter overlaps', () => {
+  const fewshot = 'Digital transformation is no longer optional for the modern enterprise. Organisations that embrace change position themselves well.';
+  assert.equal(sharesRun('Some say digital transformation is no longer optional for anyone.', fewshot), true);
+  assert.equal(sharesRun('Digital transformation is no longer a buzzword here.', fewshot), false);
+  assert.equal(sharesRun('', fewshot), false);
 });

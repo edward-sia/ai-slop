@@ -84,3 +84,59 @@ export function toCorpusItem(item, { id, bucket, label, explanation }) {
     },
   };
 }
+
+export function countByClass(items) {
+  const counts = Object.fromEntries(CLASSES.map(c => [c, 0]));
+  for (const item of items) counts[classify(item)] += 1;
+  return counts;
+}
+
+// Rows are what the model returned (verdict and confidence), columns what the
+// reader said. The gates block answers "what if MIN_CONFIDENCE were X" on these
+// same paragraphs, which is the number that decides whether to move the gate.
+export function calibration(items) {
+  const annotated = items.filter(i => i.annotation).map(i => i.annotation);
+  const cells = {};
+  for (const a of annotated) {
+    const key = `${a.model.verdict}/${a.model.confidence}`;
+    cells[key] ??= { SLOP: 0, HUMAN: 0 };
+    cells[key][a.label_quality] += 1;
+  }
+  const gates = {};
+  for (const min of Object.keys(CONFIDENCE_RANK)) {
+    let flagged = 0;
+    let correct = 0;
+    for (const a of annotated) {
+      const wouldFlag = a.model.verdict === 'SLOP' && CONFIDENCE_RANK[a.model.confidence] >= CONFIDENCE_RANK[min];
+      if (!wouldFlag) continue;
+      flagged += 1;
+      if (a.label_quality === 'SLOP') correct += 1;
+    }
+    gates[min] = {
+      flagged,
+      precision: flagged ? correct / flagged : null,
+      flag_rate: annotated.length ? flagged / annotated.length : 0,
+    };
+  }
+  return { cells, gates, total: annotated.length };
+}
+
+function words(text) {
+  return text.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean);
+}
+
+export function shingles(text, n) {
+  const w = words(text);
+  const out = new Set();
+  for (let i = 0; i + n <= w.length; i++) out.add(w.slice(i, i + n).join(' '));
+  return out;
+}
+
+// True when `text` shares a run of n consecutive words with `reference`. Used to
+// keep production items that echo a few-shot example out of the corpus, since
+// the README records that such overlap inflates the score.
+export function sharesRun(text, reference, n = 6) {
+  const ref = shingles(reference, n);
+  for (const s of shingles(text, n)) if (ref.has(s)) return true;
+  return false;
+}
