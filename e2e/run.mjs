@@ -129,7 +129,13 @@ try {
     assert.equal(r.page.url, pageUrl);
     assert.equal(r.page.title, 'Slop fixture');
   }
-  step(`exported ${lines.length} records`);
+  const byLabel = label => lines.find(r => r.kind === 'annotation' && r.label_quality === label);
+  assert.equal(byLabel('HUMAN').explanation, 'e2e: flagged but real', 'the label key must not leak into the explanation');
+  assert.equal(byLabel('SLOP').explanation, 'e2e: clean but slop');
+  assert.equal(byLabel('HUMAN').model.flagged, true);
+  assert.equal(byLabel('SLOP').model.flagged, false);
+  assert.equal(lines.find(r => r.kind === 'dismissal').label_quality, null);
+  step(`exported ${lines.length} records with the expected labels and explanations`);
 
   const triageArgs = [path.join(ROOT, 'eval', 'triage.mjs'), `--inbox=${inbox}`, `--corpus=${corpusCopy}`, `--log=${logCopy}`];
   const summary = spawnSync(process.execPath, [...triageArgs, '--summary'], { encoding: 'utf8' });

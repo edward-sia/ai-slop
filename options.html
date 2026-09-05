@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AI Slop Detector: annotations</title>
+<style>
+  body { font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 560px; margin: 40px auto; padding: 0 20px; color: #1f1f1f; background: #fff; }
+  h1 { font-size: 18px; font-weight: 500; }
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 20px 0; }
+  .stat { background: #f4f4f2; border-radius: 8px; padding: 12px 14px; }
+  .stat .label { color: #666; font-size: 12px; }
+  .stat .value { font-size: 24px; font-weight: 500; }
+  button { font: inherit; padding: 8px 14px; border: 1px solid #888; border-radius: 8px; background: #fff; color: inherit; cursor: pointer; margin-right: 8px; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  p.note { color: #666; font-size: 13px; }
+  code { font-size: 12px; }
+  @media (prefers-color-scheme: dark) {
+    body { color: #eee; background: #1e1e1e; }
+    .stat { background: #2a2a2a; }
+    .stat .label, p.note { color: #aaa; }
+    button { background: #1e1e1e; border-color: #666; }
+  }
+</style>
+</head>
+<body>
+<h1>Annotations</h1>
+<div class="grid">
+  <div class="stat"><div class="label">Annotations</div><div class="value" id="annotations">0</div></div>
+  <div class="stat"><div class="label">Dismissals</div><div class="value" id="dismissals">0</div></div>
+  <div class="stat"><div class="label">Disagree with the model</div><div class="value" id="disagreements">0</div></div>
+  <div class="stat"><div class="label">Storage used</div><div class="value" id="bytes">0 KB</div></div>
+</div>
+<button id="export">Export JSONL</button>
+<button id="clear" disabled>Clear exported</button>
+<p class="note" id="status">Drop the exported file into <code>eval/inbox/</code> and run <code>node eval/triage.mjs</code>.</p>
+<script src="options.js"></script>
+</body>
+</html>

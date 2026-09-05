@@ -16,6 +16,11 @@ const evaluated = new WeakSet();
 // The page may have given the paragraph its own tooltip. Keep it so dismissing
 // can hand it back rather than deleting it.
 const borrowedTitle = new WeakMap();
+// What the model said about each paragraph, kept so a label can be recorded
+// alongside the verdict it disagrees or agrees with. Only paragraphs with an
+// entry here get the Label pill.
+const judged = new WeakMap();
+const HOVER_DELAY_MS = 250;
 
 const queue = [];
 let inFlight = 0;
@@ -88,13 +93,94 @@ function scanPageForSlop() {
     const text = cleanText.slice(0, MAX_LENGTH);
     queue.push(async () => {
       const response = await ask(text);
-      if (!response || response.error || !response.isSlop) return;
+      if (!response || response.error) return;
       if (!element.isConnected) return;
+      judged.set(element, {
+        text,
+        verdict: response.verdict,
+        confidence: response.confidence,
+        flagged: Boolean(response.isSlop),
+        model: response.model,
+        prompt_sha256: response.prompt_sha256
+      });
+      if (!response.isSlop) return;
       flag(element, response.reason ?? "Flagged as AI slop by the local model. Click to dismiss.");
     });
   }
   pump();
 }
+
+// Records. The worker adds text_sha256, because crypto.subtle is missing on
+// plain http pages and the worker always has it.
+function recordId(kind) {
+  const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  return `${kind === "annotation" ? "ann" : "dis"}_${stamp}_${Math.random().toString(36).slice(2, 6)}`;
+}
+
+function buildRecord(kind, info, label, explanation) {
+  return {
+    id: recordId(kind),
+    kind,
+    label_quality: label,
+    explanation,
+    text: info.text,
+    model: {
+      name: info.model,
+      verdict: info.verdict,
+      confidence: info.confidence,
+      flagged: info.flagged,
+      prompt_sha256: info.prompt_sha256
+    },
+    page: { url: location.href, title: document.title },
+    created_at: new Date().toISOString()
+  };
+}
+
+function saveRecord(record) {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage({ action: "saveRecord", record }, response => {
+      if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
+      if (!response?.ok) return reject(new Error(response?.error ?? "save failed"));
+      resolve();
+    });
+  });
+}
+
+function openAnnotation(paragraph) {
+  const info = judged.get(paragraph);
+  if (!info) return;
+  SlopAnnotator.open({
+    element: paragraph,
+    excerpt: info.text.slice(0, 90),
+    model: { verdict: info.verdict, confidence: info.confidence },
+    onSave: async (label, explanation) => {
+      await saveRecord(buildRecord("annotation", info, label, explanation));
+      // The reader called a flagged paragraph Real. Their word beats the model's,
+      // and the annotation already says so, so no dismissal record is written.
+      if (label === "HUMAN" && paragraph.classList.contains(FLAG_CLASS)) unflag(paragraph);
+    }
+  });
+}
+
+// Hover a judged paragraph for a moment and the Label pill appears at its top
+// right corner. Both listeners are delegated and neither stops propagation.
+let hoverTimer = null;
+document.addEventListener("mouseover", event => {
+  const paragraph = event.target.closest?.("p");
+  if (!paragraph || !judged.has(paragraph)) return;
+  if (SlopAnnotator.isOpen() || SlopAnnotator.isShowing(paragraph)) return;
+  clearTimeout(hoverTimer);
+  hoverTimer = setTimeout(() => SlopAnnotator.showPill(paragraph, openAnnotation), HOVER_DELAY_MS);
+});
+
+document.addEventListener("mouseout", event => {
+  const paragraph = event.target.closest?.("p");
+  if (!paragraph || !judged.has(paragraph)) return;
+  // Moving within the paragraph, or onto the pill itself, is not leaving.
+  if (paragraph.contains(event.relatedTarget) || SlopAnnotator.isHost(event.relatedTarget)) return;
+  clearTimeout(hoverTimer);
+  SlopAnnotator.hidePill();
+});
 
 // One delegated listener rather than one per paragraph. It never calls
 // preventDefault or stopPropagation, so the page's own click handling is
@@ -110,11 +196,23 @@ document.addEventListener("click", event => {
   if (String(window.getSelection?.() ?? "").length > 0) return;
 
   unflag(element);
+
+  // A dismissal is a weak signal that the flag was wrong. Record it; triage
+  // decides what it means.
+  const info = judged.get(element);
+  if (info) {
+    saveRecord(buildRecord("dismissal", info, null, "")).catch(error => {
+      console.warn("[slop] dismissal not saved:", error.message);
+    });
+  }
 });
 
 // Escape clears every flag on the page at once.
 document.addEventListener("keydown", event => {
   if (event.key !== "Escape") return;
+  // The popover owns Escape while it is open. Its own handler also stops the
+  // event, so this is a second guard rather than the only one.
+  if (SlopAnnotator.isOpen()) return;
   document.querySelectorAll(`.${FLAG_CLASS}`).forEach(unflag);
 });
 
