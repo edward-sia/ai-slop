@@ -27,6 +27,9 @@ python3 eval/compare.py eval/results_shipped_qwen3_4b.json eval/results_mine_qwe
 `--min-confidence=high` flags less. `--min-confidence=low` flags more. That is the
 precision knob, and it needs no prompt change.
 
+`--split=prod` runs or scores only the items promoted from reader annotations, and
+`--split=synthetic` only the hand-written ones. Both `run.mjs` and `score.py` accept it.
+
 ## Results
 
 49 paragraphs, graded on the quality axis. Every run below uses the decontaminated
@@ -116,6 +119,40 @@ inflate the score by roughly 2 points.
 Precision matters more than recall here. A false positive draws a box on a page the reader
 trusts. A false negative just leaves a paragraph alone. The shipped prompt sits at 100%
 precision on 25 human paragraphs, and the remaining misses are two items in `H` and `I`.
+
+## Production annotations
+
+The extension lets the reader label any judged paragraph on a real page as Slop or Real,
+with a one sentence reason. Hover a paragraph, click the Label pill, pick, type, Enter. A
+dismissed flag is also recorded, as a weaker signal. Every record carries what the model
+said about that same paragraph, the model name, and a hash of the prompt in force.
+
+The loop:
+
+1. Read with the extension on. Label paragraphs when you disagree with the model, and
+   sometimes when you agree, so agreements are represented too.
+2. Open the extension's options page, export, and drop the file into `eval/inbox/`.
+3. `node eval/triage.mjs --summary` prints the counts by class and a calibration table:
+   what the model said against what you said, and the precision and flag rate each
+   `MIN_CONFIDENCE` setting would have had on these paragraphs.
+4. `node eval/triage.mjs` walks the new paragraphs, disagreements first. Promote, reject or
+   skip. Promoted items get `prod-NNN` ids, `label_provenance: "UNKNOWN"`, and a `source`
+   block with the URL, your explanation and the model's verdict at capture.
+5. `node eval/run.mjs --arm=v3 --model=qwen3:4b --split=prod` then
+   `python3 eval/score.py eval/results_v3_qwen3_4b.json quality --split=prod` scores the
+   production items on their own.
+
+Two rules. Production items never go into the few-shot; triage warns when a paragraph
+shares six consecutive words with an example and needs `p!` to promote it. And
+disagreements are triaged before agreements, because they are the items that move the
+score.
+
+Decisions live in `eval/triage_log.json`, keyed by text hash, so re-running triage on the
+same inbox files asks nothing twice. Inbox files are append-only and are never modified.
+
+`npm test` runs the triage and worker unit tests. `npm run e2e` drives the extension in
+Playwright's Chromium against the local Ollama, labels two paragraphs, dismisses a flag,
+exports, and runs triage on the export against a scratch copy of the corpus.
 
 ## Two things this model cannot see
 
