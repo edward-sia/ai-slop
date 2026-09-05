@@ -68,6 +68,8 @@ try {
   const pill = page.locator('ai-slop-annotator .pill');
   const popover = page.locator('ai-slop-annotator .popover');
   const saved = page.locator('ai-slop-annotator .saved');
+  // The popover is an overlay. Nothing below the labelled paragraph may move.
+  const layoutBefore = await page.locator('#real-b').boundingBox();
 
   // The pill only appears once the paragraph has a verdict. Hover, and if it is
   // not there yet, move away and hover again until the verdict has arrived.
@@ -88,6 +90,7 @@ try {
     await revealPill(selector);
     await pill.click();
     await popover.waitFor({ state: 'visible' });
+    assert.deepEqual(await page.locator('#real-b').boundingBox(), layoutBefore, 'opening the popover moved page content');
     await page.keyboard.press(key);
     await page.keyboard.type(why);
     await page.keyboard.press('Enter');
@@ -102,6 +105,15 @@ try {
   await label('#real-a', 's', 'e2e: clean but slop');
   assert.equal(await page.locator('#real-a.ai-slop-flagged').count(), 0, 'labelling Slop draws nothing');
   step('labelled a clean paragraph Slop');
+
+  // Escape inside the popover closes only the popover. The page's flags stay.
+  await revealPill('#slop-b');
+  await pill.click();
+  await popover.waitFor({ state: 'visible' });
+  await page.keyboard.press('Escape');
+  await popover.waitFor({ state: 'hidden' });
+  assert.equal(await page.locator('#slop-b.ai-slop-flagged').count(), 1, 'Escape in the popover must not clear flags');
+  step('Escape closed the popover and left the flag alone');
 
   await page.locator('#slop-b').click();
   await page.waitForFunction(() => !document.querySelector('#slop-b').classList.contains('ai-slop-flagged'));
