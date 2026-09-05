@@ -1,11 +1,24 @@
 import json,sys,collections,re
-p=sys.argv[1]
-# second arg picks the label axis: 'quality' (default) or 'provenance'
-AXIS='label_'+(sys.argv[2] if len(sys.argv)>2 else 'quality')
+positional=[a for a in sys.argv[1:] if not a.startswith('--')]
+options=dict(a[2:].split('=',1) for a in sys.argv[1:] if a.startswith('--') and '=' in a)
+p=positional[0]
+# second positional arg picks the label axis: 'quality' (default) or 'provenance'
+AXIS='label_'+(positional[1] if len(positional)>1 else 'quality')
+# --split=prod scores only items promoted from reader annotations (they carry a
+# `source` block). --split=synthetic scores only the hand-written items.
+SPLIT=options.get('split','all')
 d=json.load(open(p))
+if SPLIT=='prod': d=[x for x in d if 'source' in x]
+elif SPLIT=='synthetic': d=[x for x in d if 'source' not in x]
 for x in d:
     if AXIS in x: x['label']=x[AXIS]
-print(f'grading against {AXIS}')
+# production items carry label_provenance UNKNOWN. Skip anything without a
+# binary label on the chosen axis rather than counting it as wrong.
+skipped=sum(1 for x in d if x['label'] not in ('SLOP','HUMAN'))
+d=[x for x in d if x['label'] in ('SLOP','HUMAN')]
+print(f'grading against {AXIS}  split={SPLIT}'+(f'  skipped {skipped} without a binary {AXIS}' if skipped else ''))
+if not d:
+    print('nothing to score'); sys.exit(0)
 tp=sum(1 for x in d if x['label']=='SLOP' and x['pred']=='SLOP')
 fn=sum(1 for x in d if x['label']=='SLOP' and x['pred']=='HUMAN')
 fp=sum(1 for x in d if x['label']=='HUMAN' and x['pred']=='SLOP')
