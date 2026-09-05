@@ -1,0 +1,10 @@
+{
+  "name": "ai-slop",
+  "private": true,
+  "version": "1.2.0",
+  "description": "Local AI slop detector: Chrome extension, eval harness, annotation flywheel",
+  "scripts": {
+    "test": "node --test",
+    "e2e": "node e2e/run.mjs"
+  }
+}
