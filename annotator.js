@@ -28,15 +28,17 @@
     .excerpt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .model b { color: #b26b00; font-weight: 500; }
     .seg { display: inline-flex; border: 1px solid #888; border-radius: 8px; overflow: hidden; align-self: flex-start; }
-    .seg button { all: unset; padding: 6px 14px; cursor: pointer; font: inherit; color: inherit; }
+    .seg button { all: unset; box-sizing: border-box; padding: 6px 14px; cursor: pointer; font: inherit; color: inherit; }
     .seg button + button { border-left: 1px solid #888; }
     .seg button[aria-pressed="true"] { background: #e6f1fb; color: #0c447c; }
-    input { all: unset; font: inherit; color: inherit; border: 1px solid #c9c9c9; border-radius: 8px; padding: 7px 10px; width: 100%; }
+    input { all: unset; box-sizing: border-box; display: block; width: 100%; font: inherit; color: inherit; border: 1px solid #c9c9c9; border-radius: 8px; padding: 7px 10px; }
     input:focus { border-color: #378add; }
     .row { display: flex; align-items: center; gap: 8px; }
     .hint { flex: 1; font-size: 11px; }
-    .btn { all: unset; font: inherit; cursor: pointer; border: 1px solid #c9c9c9; border-radius: 8px; padding: 6px 12px; }
-    .btn.save { border-color: #378add; color: #0c447c; }
+    .btn { all: unset; box-sizing: border-box; font: inherit; cursor: pointer; border: 1px solid #c9c9c9; border-radius: 8px; padding: 6px 12px; }
+    .btn:hover { border-color: #888; }
+    .btn.save { background: #378add; border-color: #378add; color: #fff; }
+    .btn.save:hover { background: #185fa5; border-color: #185fa5; }
     .saved { color: #1d9e75; font-size: 12px; }
     [hidden] { display: none !important; }
     @media (prefers-color-scheme: dark) {
@@ -45,6 +47,9 @@
       .model b { color: #ffc046; }
       .seg button[aria-pressed="true"] { background: #0c447c; color: #e6f1fb; }
       input, .btn { border-color: #555; }
+      .btn:hover { border-color: #888; }
+      .btn.save { background: #378add; border-color: #378add; color: #fff; }
+      .btn.save:hover { background: #85b7eb; border-color: #85b7eb; color: #042c53; }
     }
   `;
 
